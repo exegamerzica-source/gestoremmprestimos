@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestor de Empréstimos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <section id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="brand-line">
+        <div class="brand-mark">GE</div>
+        <div>
+          <strong>Gestor de Empréstimos</strong>
+          <span>Controle simples para clientes, parcelas e documentos</span>
+        </div>
+      </div>
+
+      <div class="login-choice-grid">
+        <section class="access-panel">
+          <div>
+            <span class="eyebrow">Entrar</span>
+            <h2>Somente visualizar <span class="help-tip" title="Victor e Romildo entram aqui para consultar dados, documentos e pagamentos, sem alterar nada.">?</span></h2>
+            <p>Para acompanhar clientes, parcelas, documentos e comprovantes.</p>
+          </div>
+          <button class="profile-card" type="button" data-viewer-login="Victor">
+            <span class="profile-avatar">V</span>
+            <span><strong>Victor</strong><small>Visualização</small></span>
+          </button>
+          <button class="profile-card" type="button" data-viewer-login="Romildo">
+            <span class="profile-avatar">R</span>
+            <span><strong>Romildo</strong><small>Visualização</small></span>
+          </button>
+        </section>
+
+        <form id="loginForm" class="access-panel editor-panel">
+          <div>
+            <span class="eyebrow">Editar</span>
+            <h2>Admin do sistema <span class="help-tip" title="Isabella entra aqui para cadastrar clientes, editar parcelas, anexar documentos e registrar pagamentos.">?</span></h2>
+            <p>Para cadastrar, alterar pagamentos, anexar documentos e editar históricos.</p>
+          </div>
+          <div class="profile-card editor-card">
+            <span class="profile-avatar editor">I</span>
+            <span><strong>Isabella</strong><small>Editora/Admin</small></span>
+          </div>
+          <label id="passwordGroup">
+            Senha da Isabella <span class="help-tip" title="Senha simples apenas para separar quem edita de quem só visualiza.">?</span>
+            <input id="loginPassword" type="password" placeholder="Digite a senha" autocomplete="current-password">
+          </label>
+          <button class="primary-btn" type="submit">Entrar para editar</button>
+          <p id="loginError" class="form-error" hidden>Senha incorreta para editar.</p>
+          <p id="loginHint" class="demo-hint">Senha inicial: <b>admin123</b></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section id="appShell" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand-line compact">
+        <div class="brand-mark">GE</div>
+        <div>
+          <strong>Gestor</strong>
+          <span>Empréstimos</span>
+        </div>
+      </div>
+      <nav class="nav-list" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="clients">Clientes</button>
+        <button class="nav-item" data-view="documents">Documentos</button>
+        <button class="nav-item" data-view="history">Histórico</button>
+      </nav>
+      <div class="session-card">
+        <span id="sessionRole">Admin</span>
+        <strong id="sessionMode">Pode editar</strong>
+        <button id="logoutBtn" class="ghost-btn" type="button">Sair</button>
+      </div>
+    </aside>
+
+    <div class="mobile-topbar">
+      <div class="brand-line compact">
+        <div class="brand-mark">GE</div>
+        <div>
+          <strong>Gestor</strong>
+          <span id="mobileSessionRole">Admin</span>
+        </div>
+      </div>
+      <button id="mobileNewClientBtn" class="primary-btn small admin-only" type="button">Novo</button>
+    </div>
+
+    <main id="mainContent" class="main-content" tabindex="-1"></main>
+
+    <nav class="bottom-nav" aria-label="Navegação mobile">
+      <button class="bottom-nav-item active" data-view="dashboard">Início</button>
+      <button class="bottom-nav-item" data-view="clients">Clientes</button>
+      <button class="bottom-nav-item" data-view="documents">Docs</button>
+      <button class="bottom-nav-item" data-view="history">Histórico</button>
+    </nav>
+  </section>
+
+  <dialog id="clientDialog" class="dialog">
+    <form id="clientForm" class="dialog-card" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <span class="eyebrow">Cadastro manual</span>
+          <h2 id="clientDialogTitle">Novo cliente</h2>
+          <p>Valores e parcelas ficam manuais para respeitar cada negociação.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close-dialog="clientDialog" aria-label="Fechar">×</button>
+      </div>
+
+      <input id="clientId" type="hidden">
+
+      <div class="form-grid">
+        <label class="span-2">
+          Nome completo do cliente <span class="help-tip" title="Nome da pessoa que pegou o dinheiro emprestado.">?</span>
+          <input id="fullName" required placeholder="Ex: João Pereira dos Santos">
+        </label>
+        <label>
+          CPF <span class="help-tip" title="Documento principal do cliente. Pode digitar com ou sem pontos.">?</span>
+          <input id="cpf" inputmode="numeric" placeholder="Ex: 000.000.000-00">
+        </label>
+        <label>
+          RG / Documento <span class="help-tip" title="Outro documento de identificação, se a Isabella quiser registrar.">?</span>
+          <input id="rg" placeholder="Ex: 00.000.000-0">
+        </label>
+        <label>
+          Telefone / WhatsApp <span class="help-tip" title="Número principal para cobrança, aviso e negociação.">?</span>
+          <input id="phone" inputmode="tel" placeholder="Ex: (11) 99999-9999">
+        </label>
+        <label>
+          Data de nascimento <span class="help-tip" title="Ajuda a confirmar a identidade do cliente e completar a ficha.">?</span>
+          <input id="birthDate" type="date">
+        </label>
+        <label>
+          E-mail <span class="help-tip" title="Campo opcional para contato ou envio de ficha/documentos.">?</span>
+          <input id="email" type="email" placeholder="Ex: cliente@email.com">
+        </label>
+        <label>
+          Profissão <span class="help-tip" title="Informação pessoal útil para entender o perfil do cliente.">?</span>
+          <input id="occupation" placeholder="Ex: autônomo, vendedor, motorista">
+        </label>
+        <label class="span-2">
+          Endereço completo <span class="help-tip" title="Rua, número, complemento, bairro e cidade do cliente.">?</span>
+          <input id="address" placeholder="Ex: Rua Exemplo, 123, Centro, São Paulo - SP">
+        </label>
+        <label>
+          Contato de referência <span class="help-tip" title="Pessoa próxima para referência, caso a Isabella queira anotar.">?</span>
+          <input id="referenceContact" placeholder="Ex: Maria - mãe">
+        </label>
+        <label>
+          Telefone da referência <span class="help-tip" title="Telefone do contato de referência do cliente.">?</span>
+          <input id="referencePhone" inputmode="tel" placeholder="Ex: (11) 98888-8888">
+        </label>
+        <label>
+          Indicação? <span class="help-tip" title="Marque se esse cliente veio indicado por outra pessoa.">?</span>
+          <select id="hasReferral">
+            <option value="nao">Não</option>
+            <option value="sim">Sim</option>
+          </select>
+        </label>
+        <label>
+          Nome de quem indicou <span class="help-tip" title="Use para saber de onde esse cliente veio. É opcional.">?</span>
+          <input id="referralName" placeholder="Opcional">
+        </label>
+        <label>
+          Data do empréstimo <span class="help-tip" title="Dia em que o dinheiro foi entregue ao cliente.">?</span>
+          <input id="loanDate" type="date">
+        </label>
+        <label>
+          Valor emprestado <span class="help-tip" title="Valor que saiu do bolso do credor. Não calcula juros automaticamente.">?</span>
+          <input id="amountBorrowed" inputmode="decimal" placeholder="Ex: 1000">
+        </label>
+        <label>
+          Data de devolução <span class="help-tip" title="Data combinada para o cliente devolver ou iniciar os pagamentos.">?</span>
+          <input id="returnDate" type="date">
+        </label>
+        <label>
+          Valor combinado com juros <span class="help-tip" title="Valor final negociado manualmente com o cliente.">?</span>
+          <input id="amountWithInterest" inputmode="decimal" placeholder="Ex: 1300">
+        </label>
+        <label>
+          Vai parcelar? <span class="help-tip" title="Escolha se o pagamento será único ou dividido em parcelas.">?</span>
+          <select id="installmentEnabled">
+            <option value="sim">Sim</option>
+            <option value="nao">Não, pagamento único</option>
+          </select>
+        </label>
+        <label>
+          Em quantas vezes <span class="help-tip" title="Quantidade total de parcelas combinadas.">?</span>
+          <input id="installmentsTotal" type="number" min="1" max="120" value="1">
+        </label>
+        <label>
+          Frequência de pagamento <span class="help-tip" title="Define se o cliente paga mensal, quinzenal, semanal, diário ou uma vez só.">?</span>
+          <select id="frequency">
+            <option>Mensal</option>
+            <option>Quinzenal</option>
+            <option>Semanal</option>
+            <option>Diário</option>
+            <option>Pagamento único</option>
+          </select>
+        </label>
+        <label>
+          Situação atual <span class="help-tip" title="Use para separar cliente ativo, quitado ou sem empréstimo no momento.">?</span>
+          <select id="loanState">
+            <option value="active">Com empréstimo ativo</option>
+            <option value="paid">Quitado / já pagou</option>
+            <option value="none">Sem empréstimo no momento</option>
+          </select>
+        </label>
+        <label class="span-2">
+          Observação importante <span class="help-tip" title="Anotações livres sobre acordos, problemas, promessas ou detalhes do cliente.">?</span>
+          <textarea id="clientNote" rows="4" placeholder="Ex: pegou 1000 para pagar 1300, mas pagou só 300 até agora."></textarea>
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="ghost-btn" type="button" data-close-dialog="clientDialog">Cancelar</button>
+        <button class="primary-btn" type="submit">Salvar cliente</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="paymentDialog" class="dialog">
+    <form id="paymentForm" class="dialog-card narrow" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <span class="eyebrow">Parcela manual</span>
+          <h2 id="paymentDialogTitle">Registrar pagamento</h2>
+          <p>Edite valores, status, datas e comprovante desta parcela.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close-dialog="paymentDialog" aria-label="Fechar">×</button>
+      </div>
+
+      <input id="paymentClientId" type="hidden">
+      <input id="paymentInstallmentId" type="hidden">
+
+      <div class="form-grid">
+        <label>
+          Data prevista <span class="help-tip" title="Data combinada para aquela parcela ser paga.">?</span>
+          <input id="installmentDueDate" type="date">
+        </label>
+        <label>
+          Status da parcela <span class="help-tip" title="Indica se a parcela está pendente, paga, parcial ou em atraso.">?</span>
+          <select id="installmentStatus">
+            <option value="pending">Pendente</option>
+            <option value="paid">Pago</option>
+            <option value="partial">Pago parcial</option>
+            <option value="late">Devendo / atrasado</option>
+          </select>
+        </label>
+        <label>
+          Valor combinado da parcela <span class="help-tip" title="Valor manual combinado para esta parcela específica.">?</span>
+          <input id="installmentExpected" inputmode="decimal" placeholder="Manual">
+        </label>
+        <label>
+          Valor que pagou <span class="help-tip" title="Quanto o cliente realmente pagou nesta movimentação.">?</span>
+          <input id="installmentPaid" inputmode="decimal" placeholder="Manual">
+        </label>
+        <label>
+          Data do pagamento <span class="help-tip" title="Data em que o pagamento entrou de verdade.">?</span>
+          <input id="installmentPaidDate" type="date">
+        </label>
+        <label>
+          Comprovante do pagamento <span class="help-tip" title="Anexe foto ou PDF do comprovante desta parcela.">?</span>
+          <input id="receiptFile" type="file" accept="image/*,.pdf">
+        </label>
+        <label class="span-2">
+          Observação do pagamento <span class="help-tip" title="Histórico do que aconteceu neste pagamento. Ex: pagou só uma parte.">?</span>
+          <textarea id="paymentNote" rows="3" placeholder="Ex: pagou 300 hoje e prometeu o restante sexta."></textarea>
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="ghost-btn" type="button" data-close-dialog="paymentDialog">Cancelar</button>
+        <button class="primary-btn" type="submit">Salvar pagamento</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="documentDialog" class="dialog">
+    <form id="documentForm" class="dialog-card narrow" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <span class="eyebrow">Arquivo do cliente</span>
+          <h2>Adicionar documento</h2>
+          <p>Documento fica ligado ao cliente e aparece para os dois perfis.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close-dialog="documentDialog" aria-label="Fechar">×</button>
+      </div>
+
+      <input id="documentClientId" type="hidden">
+      <div class="form-grid">
+        <label class="span-2">
+          Nome do documento <span class="help-tip" title="Nome fácil para encontrar o arquivo depois.">?</span>
+          <input id="documentTitle" required placeholder="Ex: RG, contrato assinado, comprovante de endereço">
+        </label>
+        <label>
+          Tipo <span class="help-tip" title="Categoria do arquivo arquivado para esse cliente.">?</span>
+          <select id="documentType">
+            <option>Documento pessoal</option>
+            <option>Contrato</option>
+            <option>Comprovante de endereço</option>
+            <option>Comprovante de pagamento</option>
+            <option>Outro</option>
+          </select>
+        </label>
+        <label>
+          Arquivo <span class="help-tip" title="PDF ou imagem que ficará ligado ao cliente.">?</span>
+          <input id="documentFile" type="file" accept="image/*,.pdf">
+        </label>
+        <label class="span-2">
+          Observação do documento <span class="help-tip" title="Detalhe opcional sobre o documento anexado.">?</span>
+          <textarea id="documentNote" rows="3" placeholder="Alguma informação importante sobre esse arquivo."></textarea>
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="ghost-btn" type="button" data-close-dialog="documentDialog">Cancelar</button>
+        <button class="primary-btn" type="submit">Salvar documento</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="ratingPopover" class="rating-popover" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="./supabase-config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
