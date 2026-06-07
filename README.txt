@@ -4,7 +4,7 @@ Como abrir:
 - Abra o arquivo index.html no navegador.
 
 Acessos:
-- Isabella/Editora: admin123
+- Isabella/Editora: Isabella
 - Visualização: entra sem senha
 
 O que esta versão já faz:
@@ -19,6 +19,14 @@ O que esta versão já faz:
 - Cada pagamento gera histórico.
 - Cada cliente tem nota de 0 a 5 estrelas com motivos ao clicar/passar o mouse.
 - Filtros: todos, quem pagou, devendo, em dia e sem empréstimo.
+- Busca rápida global por nome, CPF, telefone, e-mail, endereço e indicação.
+- Filtro por mês para lista, histórico, resumo financeiro e vencimentos.
+- Avisos de vencimento: vence hoje, vence na semana e atrasado.
+- Resumo financeiro: total emprestado, combinado, recebido e pendente.
+- Botão WhatsApp dentro do cliente e nos avisos de cobrança.
+- Backup geral em CSV e impressão/PDF.
+- Marca visual "Gestão Isabella & Romildo".
+- Histórico em formato de timeline.
 - Aba Documentos com arquivos ligados ao cliente.
 - Exportação de ficha completa do cliente para impressão/PDF.
 - Layout responsivo para desktop e celular.

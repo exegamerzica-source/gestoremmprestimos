@@ -547,6 +547,67 @@ h3 {
   background: #fffbeb;
 }
 
+.command-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 190px auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid rgba(198, 161, 91, 0.24);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: var(--shadow-soft);
+}
+
+.command-search,
+.command-date {
+  min-width: 0;
+}
+
+.command-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.global-results {
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+}
+
+.search-result-row,
+.due-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.search-result-row:first-of-type,
+.due-row:first-of-type {
+  border-top: 0;
+}
+
+.search-result-row strong,
+.due-row strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.search-result-row span,
+.due-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .search-input {
   max-width: 360px;
 }
@@ -630,6 +691,59 @@ h3 {
 .step-list span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.finance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.finance-card {
+  padding: 16px;
+  border: 1px solid rgba(198, 161, 91, 0.32);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, #fffdf8, #fbf4e6);
+  box-shadow: var(--shadow-card);
+}
+
+.finance-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.finance-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.due-alerts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.due-column {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.due-column.today {
+  border-color: rgba(217, 119, 6, 0.28);
+}
+
+.due-column.overdue {
+  border-color: rgba(225, 29, 72, 0.26);
 }
 
 .client-grid {
@@ -822,6 +936,11 @@ h3 {
   box-shadow: 0 10px 24px rgba(30, 24, 16, 0.05);
 }
 
+.empty-state.compact {
+  padding: 16px;
+  box-shadow: none;
+}
+
 .empty-state h3 {
   margin-bottom: 6px;
 }
@@ -991,6 +1110,59 @@ h3 {
   padding: 14px;
 }
 
+.timeline-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 1px rgba(198, 161, 91, 0.38), 0 8px 18px rgba(198, 161, 91, 0.2);
+}
+
+.timeline-row.payment .timeline-dot {
+  background: #c6a15b;
+}
+
+.timeline-row.document .timeline-dot {
+  background: #1d1b17;
+}
+
+.timeline-row.risk .timeline-dot {
+  background: var(--red);
+}
+
+.timeline-row.note .timeline-dot {
+  background: var(--amber);
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.history-head span {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.timeline-row p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .dialog {
   width: min(920px, calc(100vw - 28px));
   border: 0;
@@ -1111,7 +1283,8 @@ h3 {
 
 @media (max-width: 1180px) {
   .client-grid,
-  .stat-grid {
+  .stat-grid,
+  .finance-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1170,11 +1343,28 @@ h3 {
   .stat-grid,
   .client-grid,
   .installment-grid,
-  .step-list {
+  .step-list,
+  .finance-grid,
+  .due-alerts,
+  .command-bar {
     grid-template-columns: 1fr;
   }
 
   .toolbar {
+    display: grid;
+  }
+
+  .command-actions {
+    justify-content: stretch;
+  }
+
+  .command-actions button {
+    flex: 1;
+  }
+
+  .search-result-row,
+  .due-row,
+  .history-head {
     display: grid;
   }
 

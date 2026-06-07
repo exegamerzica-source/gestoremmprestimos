@@ -11,6 +11,8 @@ const state = {
   view: "dashboard",
   filter: "all",
   search: "",
+  globalSearch: "",
+  dateFilter: "",
   selectedClientId: null,
   selectedTab: "summary"
 };
@@ -111,18 +113,6 @@ function loginViewer(name) {
   showApp();
 }
 
-function updateLoginMode() {
-  const role = $("#loginRole").value;
-  const viewer = role === "viewer";
-  $("#passwordGroup").hidden = viewer;
-  $("#loginPassword").disabled = viewer;
-  $("#loginError").hidden = true;
-  $("#loginHint").innerHTML = viewer
-    ? "Visualização entra sem senha e não consegue editar dados."
-    : "Demo: admin <b>admin123</b>. Visualização entra sem senha.";
-  if (viewer) $("#loginPassword").value = "";
-}
-
 function logout() {
   sessionStorage.removeItem(SESSION_KEY);
   state.session = null;
@@ -206,13 +196,65 @@ function help(text, variant = "") {
   return `<span class="help-tip ${variant}" title="${escapeHtml(text)}">?</span>`;
 }
 
+function renderCommandBar() {
+  return `
+    <div class="command-bar">
+      <label class="command-search">
+        Busca rÃ¡pida ${help("Procure por nome, CPF, telefone, e-mail, endereÃ§o ou indicaÃ§Ã£o sem sair da tela atual.")}
+        <input id="globalSearch" value="${escapeHtml(state.globalSearch)}" placeholder="Buscar cliente, CPF ou telefone">
+      </label>
+      <label class="command-date">
+        Filtrar por mÃªs ${help("Filtra clientes, resumo financeiro, vencimentos e histÃ³rico pelo mÃªs escolhido.")}
+        <input id="dateFilter" type="month" value="${escapeHtml(state.dateFilter)}">
+      </label>
+      <div class="command-actions">
+        <button class="ghost-btn" type="button" data-action="clear-filters">Limpar</button>
+        <button class="ghost-btn" type="button" data-action="export-all-csv">CSV geral</button>
+        <button class="primary-btn" type="button" data-action="export-all-pdf">Backup PDF</button>
+      </div>
+    </div>
+    ${renderGlobalSearchResults()}
+  `;
+}
+
+function renderGlobalSearchResults() {
+  const query = state.globalSearch.trim();
+  if (!query) return "";
+
+  const results = getGlobalSearchResults().slice(0, 6);
+  return `
+    <div class="global-results">
+      <div class="section-headline">
+        <h3>Resultado da busca ${help("Clique em abrir para ir direto ao cadastro completo do cliente.")}</h3>
+        <span class="tag">${results.length} encontrado(s)</span>
+      </div>
+      ${results.length ? results.map((client) => `
+        <article class="search-result-row">
+          <div>
+            <strong>${escapeHtml(client.fullName)}</strong>
+            <span>${escapeHtml(client.cpf || "CPF nÃ£o informado")} - ${escapeHtml(client.phone || "Telefone nÃ£o informado")}</span>
+          </div>
+          <div class="inline-actions">
+            <button class="ghost-btn" type="button" data-action="open-client" data-id="${client.id}">Abrir</button>
+            <button class="ghost-btn" type="button" data-action="whatsapp-client" data-id="${client.id}">WhatsApp</button>
+          </div>
+        </article>
+      `).join("") : `<div class="empty-state">Nenhum cliente encontrado para "${escapeHtml(query)}".</div>`}
+    </div>
+  `;
+}
+
 function renderDashboardView() {
   const stats = getStats();
+  const scopedClients = getDateScopedClients();
+  const finance = getFinancialSummary(scopedClients);
+  const dueAlerts = getDueAlerts(scopedClients);
   const hasClients = state.clients.length > 0;
-  const lateClients = state.clients.filter((client) => getClientStatus(client).key === "late");
-  const activeClients = state.clients.filter((client) => ["late", "on-time"].includes(getClientStatus(client).key));
-  const recentRows = state.clients
+  const lateClients = scopedClients.filter((client) => getClientStatus(client).key === "late");
+  const activeClients = scopedClients.filter((client) => ["late", "on-time"].includes(getClientStatus(client).key));
+  const recentRows = scopedClients
     .flatMap((client) => getClientHistoryRows(client).map((row) => ({ ...row, clientName: client.fullName, clientId: client.id })))
+    .filter((row) => matchesMonth(row.createdAt, state.dateFilter))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 5);
 
@@ -230,7 +272,11 @@ function renderDashboardView() {
       </div>
 
       ${renderStorageBanner()}
+      ${renderCommandBar()}
       ${hasClients ? "" : renderStartGuide()}
+
+      ${renderFinancialSummary(finance)}
+      ${renderDueAlerts(dueAlerts)}
 
       <div class="stat-grid">
         <div class="stat-card"><span>Ativos ${help("Clientes com empréstimo em aberto, em dia ou devendo.")}</span><strong>${stats.active}</strong></div>
@@ -290,6 +336,64 @@ function renderStartGuide() {
   `;
 }
 
+function renderFinancialSummary(finance) {
+  return `
+    <div class="finance-grid">
+      <div class="finance-card">
+        <span>Total emprestado ${help("Soma dos valores que saÃ­ram para clientes no perÃ­odo filtrado.")}</span>
+        <strong>${formatMoney(finance.borrowed)}</strong>
+      </div>
+      <div class="finance-card">
+        <span>Total combinado ${help("Soma dos valores finais negociados manualmente com os clientes.")}</span>
+        <strong>${formatMoney(finance.expected)}</strong>
+      </div>
+      <div class="finance-card">
+        <span>Total recebido ${help("Soma dos valores pagos registrados nas parcelas.")}</span>
+        <strong>${formatMoney(finance.received)}</strong>
+      </div>
+      <div class="finance-card">
+        <span>Total pendente ${help("DiferenÃ§a entre o combinado e o que jÃ¡ foi marcado como pago.")}</span>
+        <strong>${formatMoney(finance.pending)}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderDueAlerts(alerts) {
+  const block = (title, rows, tone, empty) => `
+    <div class="due-column ${tone}">
+      <div class="section-headline">
+        <h3>${title}</h3>
+        <span class="tag ${tone === "overdue" ? "red" : tone === "today" ? "amber" : ""}">${rows.length}</span>
+      </div>
+      ${rows.length ? rows.slice(0, 6).map(renderDueAlertRow).join("") : `<div class="empty-state compact">${empty}</div>`}
+    </div>
+  `;
+
+  return `
+    <div class="due-alerts">
+      ${block("Vence hoje", alerts.today, "today", "Nada vencendo hoje.")}
+      ${block("Vence na semana", alerts.week, "week", "Nenhuma parcela vencendo nos prÃ³ximos 7 dias.")}
+      ${block("Atrasado", alerts.overdue, "overdue", "Nenhuma parcela atrasada pelo prazo.")}
+    </div>
+  `;
+}
+
+function renderDueAlertRow(row) {
+  return `
+    <article class="due-row">
+      <div>
+        <strong>${escapeHtml(row.client.fullName)}</strong>
+        <span>${escapeHtml(row.installment.label)} - ${formatDate(row.installment.dueDate)} - ${formatMoney(row.installment.expectedValue)}</span>
+      </div>
+      <div class="inline-actions">
+        <button class="ghost-btn" type="button" data-action="open-client" data-id="${row.client.id}">Abrir</button>
+        <button class="ghost-btn" type="button" data-action="whatsapp-client" data-id="${row.client.id}">WhatsApp</button>
+      </div>
+    </article>
+  `;
+}
+
 function renderPriorityRow(client) {
   const counts = getInstallmentCounts(client);
   return `
@@ -318,7 +422,7 @@ function renderCompactClientRow(client) {
 }
 
 function renderClientListView() {
-  const stats = getStats();
+  const stats = getStats(getFilteredClients());
   const clients = getFilteredClients();
 
   mainContent.innerHTML = `
@@ -335,6 +439,7 @@ function renderClientListView() {
       </div>
 
       ${renderStorageBanner()}
+      ${renderCommandBar()}
 
       <div class="stat-grid">
         <div class="stat-card"><span>Com empréstimo ativo</span><strong>${stats.active}</strong></div>
@@ -429,6 +534,7 @@ function renderClientCard(client) {
 
       <div class="client-actions">
         <button class="ghost-btn" type="button" data-action="open-client" data-id="${client.id}">Abrir</button>
+        <button class="ghost-btn" type="button" data-action="whatsapp-client" data-id="${client.id}">WhatsApp</button>
         ${isAdmin() ? `<button class="ghost-btn" type="button" data-action="edit-client" data-id="${client.id}">Editar</button>` : ""}
         <button class="ghost-btn" type="button" data-action="export-client" data-id="${client.id}">Exportar ficha</button>
       </div>
@@ -462,6 +568,7 @@ function renderClientDetail() {
         </div>
         <div class="page-actions">
           <button class="ghost-btn" type="button" data-action="back-to-clients">Voltar</button>
+          <button class="ghost-btn" type="button" data-action="whatsapp-client" data-id="${client.id}">WhatsApp</button>
           ${isAdmin() ? `<button class="primary-btn" type="button" data-action="edit-client" data-id="${client.id}">Editar</button>` : ""}
         </div>
       </div>
@@ -633,7 +740,10 @@ function renderClientHistoryTab(client) {
 }
 
 function renderDocumentsView() {
-  const rows = state.clients.flatMap((client) => (client.documents || []).map((doc) => ({ client, doc })));
+  const search = normalizeSearch(state.globalSearch);
+  const rows = state.clients
+    .filter((client) => clientMatchesSearch(client, search) && matchesClientMonth(client, state.dateFilter))
+    .flatMap((client) => (client.documents || []).filter((doc) => matchesMonth(doc.createdAt, state.dateFilter)).map((doc) => ({ client, doc })));
 
   mainContent.innerHTML = `
     <section>
@@ -644,6 +754,8 @@ function renderDocumentsView() {
           <p>Aba exclusiva para consultar documentos ligados a cada devedor e exportar a ficha completa.</p>
         </div>
       </div>
+
+      ${renderCommandBar()}
 
       ${rows.length ? `<div class="doc-list">${rows.map(({ client, doc }) => `
         <article class="doc-card">
@@ -664,7 +776,11 @@ function renderDocumentsView() {
 }
 
 function renderHistoryView() {
-  const rows = state.clients.flatMap((client) => getClientHistoryRows(client).map((row) => ({ ...row, clientName: client.fullName })))
+  const search = normalizeSearch(state.globalSearch);
+  const rows = state.clients
+    .filter((client) => clientMatchesSearch(client, search) && matchesClientMonth(client, state.dateFilter))
+    .flatMap((client) => getClientHistoryRows(client).map((row) => ({ ...row, clientName: client.fullName })))
+    .filter((row) => matchesMonth(row.createdAt, state.dateFilter))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   mainContent.innerHTML = `
@@ -676,19 +792,35 @@ function renderHistoryView() {
           <p>Veja pagamentos, observações e documentos de todos os clientes.</p>
         </div>
       </div>
+      ${renderCommandBar()}
       ${rows.length ? `<div class="history-list">${rows.map(renderHistoryRow).join("")}</div>` : `<div class="empty-state">Sem histórico registrado. Quando a Isabella cadastrar clientes, notas, documentos ou pagamentos, tudo aparece aqui.</div>`}
     </section>
   `;
 }
 
 function renderHistoryRow(row) {
+  const kind = getHistoryKind(row);
   return `
-    <article class="history-row">
-      <strong>${row.clientName ? `${escapeHtml(row.clientName)} - ` : ""}${escapeHtml(row.title)}</strong>
-      <span>${formatDateTime(row.createdAt)}</span>
-      <span>${escapeHtml(row.text || "")}</span>
+    <article class="history-row timeline-row ${kind}">
+      <span class="timeline-dot"></span>
+      <div>
+        <div class="history-head">
+          <strong>${row.clientName ? `${escapeHtml(row.clientName)} - ` : ""}${escapeHtml(row.title)}</strong>
+          <span>${formatDateTime(row.createdAt)}</span>
+        </div>
+        <p>${escapeHtml(row.text || "")}</p>
+      </div>
     </article>
   `;
+}
+
+function getHistoryKind(row) {
+  const text = `${row.title || ""} ${row.text || ""}`.toLowerCase();
+  if (text.includes("pagamento")) return "payment";
+  if (text.includes("documento")) return "document";
+  if (text.includes("atras") || text.includes("devendo") || text.includes("parcial")) return "risk";
+  if (text.includes("observa")) return "note";
+  return "default";
 }
 
 function handleMainClick(event) {
@@ -728,11 +860,28 @@ function handleMainClick(event) {
   if (action === "download-document") downloadDocument(actionButton.dataset.client, actionButton.dataset.doc);
   if (action === "download-receipt") downloadReceipt(actionButton.dataset.client, actionButton.dataset.installment);
   if (action === "export-client") exportClient(id);
+  if (action === "export-all-csv") exportAllCsv();
+  if (action === "export-all-pdf") exportAllPdf();
+  if (action === "whatsapp-client") openWhatsApp(id);
+  if (action === "clear-filters") {
+    state.search = "";
+    state.globalSearch = "";
+    state.dateFilter = "";
+    render();
+  }
 }
 
 function handleMainInput(event) {
   if (event.target.id === "searchClients") {
     state.search = event.target.value;
+    render();
+  }
+  if (event.target.id === "globalSearch") {
+    state.globalSearch = event.target.value;
+    render();
+  }
+  if (event.target.id === "dateFilter") {
+    state.dateFilter = event.target.value;
     render();
   }
 }
@@ -1028,24 +1177,66 @@ function getDueDate(firstDueDate, frequency, index) {
   return date.toISOString().slice(0, 10);
 }
 
+function getGlobalSearchResults() {
+  const search = normalizeSearch(state.globalSearch);
+  if (!search) return [];
+  return state.clients.filter((client) => clientMatchesSearch(client, search));
+}
+
+function getDateScopedClients() {
+  return state.clients.filter((client) => matchesClientMonth(client, state.dateFilter));
+}
+
 function getFilteredClients() {
-  const search = state.search.trim().toLowerCase();
+  const localSearch = normalizeSearch(state.search);
+  const globalSearch = normalizeSearch(state.globalSearch);
   return state.clients.filter((client) => {
     const status = getClientStatus(client).key;
     const matchesFilter = state.filter === "all" || state.filter === status;
-    const matchesSearch = !search ||
-      client.fullName.toLowerCase().includes(search) ||
-      (client.referralName || "").toLowerCase().includes(search) ||
-      (client.cpf || "").toLowerCase().includes(search) ||
-      (client.phone || "").toLowerCase().includes(search) ||
-      (client.email || "").toLowerCase().includes(search) ||
-      (client.address || "").toLowerCase().includes(search);
-    return matchesFilter && matchesSearch;
+    return matchesFilter && clientMatchesSearch(client, localSearch) && clientMatchesSearch(client, globalSearch) && matchesClientMonth(client, state.dateFilter);
   });
 }
 
-function getStats() {
-  return state.clients.reduce((acc, client) => {
+function clientMatchesSearch(client, search) {
+  if (!search) return true;
+  return [
+    client.fullName,
+    client.referralName,
+    client.cpf,
+    client.rg,
+    client.phone,
+    client.email,
+    client.address,
+    client.occupation,
+    client.referenceContact,
+    client.referencePhone
+  ].some((value) => normalizeSearch(value).includes(search));
+}
+
+function normalizeSearch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesClientMonth(client, month) {
+  if (!month) return true;
+  if (matchesMonth(client.loanDate, month) || matchesMonth(client.returnDate, month) || matchesMonth(client.createdAt, month) || matchesMonth(client.updatedAt, month)) return true;
+  if ((client.installments || []).some((item) => matchesMonth(item.dueDate, month) || matchesMonth(item.paidDate, month) || (item.payments || []).some((payment) => matchesMonth(payment.createdAt, month) || matchesMonth(payment.paymentDate, month)))) return true;
+  if ((client.history || []).some((row) => matchesMonth(row.createdAt, month))) return true;
+  return (client.documents || []).some((doc) => matchesMonth(doc.createdAt, month));
+}
+
+function matchesMonth(value, month) {
+  if (!month) return true;
+  if (!value) return false;
+  return String(value).slice(0, 7) === month;
+}
+
+function getStats(clients = state.clients) {
+  return clients.reduce((acc, client) => {
     const status = getClientStatus(client).key;
     if (status === "paid") acc.paid += 1;
     if (status === "late") acc.late += 1;
@@ -1076,6 +1267,62 @@ function getInstallmentCounts(client) {
     late,
     remaining: Math.max(0, total - paid)
   };
+}
+
+function getFinancialSummary(clients = state.clients) {
+  return clients.reduce((acc, client) => {
+    const borrowed = parseMoneyValue(client.amountBorrowed);
+    const expected = parseMoneyValue(client.amountWithInterest);
+    const received = getClientReceivedTotal(client);
+    const pending = getClientPendingTotal(client);
+    acc.borrowed += borrowed;
+    acc.expected += expected;
+    acc.received += received;
+    acc.pending += pending;
+    return acc;
+  }, { borrowed: 0, expected: 0, received: 0, pending: 0 });
+}
+
+function getClientReceivedTotal(client) {
+  return (client.installments || []).reduce((sum, item) => sum + parseMoneyValue(item.paidValue), 0);
+}
+
+function getClientPendingTotal(client) {
+  if (client.loanState === "paid") return 0;
+  const installments = client.installments || [];
+  if (installments.length) {
+    return installments.reduce((sum, item) => {
+      const expected = parseMoneyValue(item.expectedValue);
+      const paid = parseMoneyValue(item.paidValue);
+      return sum + Math.max(0, expected - paid);
+    }, 0);
+  }
+  return Math.max(0, parseMoneyValue(client.amountWithInterest) - getClientReceivedTotal(client));
+}
+
+function getDueAlerts(clients = state.clients) {
+  const todayDate = startOfDay(new Date());
+  const weekLimit = new Date(todayDate);
+  weekLimit.setDate(weekLimit.getDate() + 7);
+  const alerts = { today: [], week: [], overdue: [] };
+
+  clients.forEach((client) => {
+    (client.installments || []).forEach((installment) => {
+      if (!installment.dueDate || installment.status === "paid") return;
+      const dueDate = startOfDay(new Date(`${installment.dueDate}T12:00:00`));
+      const row = { client, installment, dueDate };
+      if (dueDate < todayDate) alerts.overdue.push(row);
+      else if (dueDate.getTime() === todayDate.getTime()) alerts.today.push(row);
+      else if (dueDate <= weekLimit) alerts.week.push(row);
+    });
+  });
+
+  Object.values(alerts).forEach((rows) => rows.sort((a, b) => a.dueDate - b.dueDate));
+  return alerts;
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function installmentTag(status) {
@@ -1321,6 +1568,156 @@ async function exportClient(id) {
   setTimeout(() => win.print(), 350);
 }
 
+function exportAllCsv() {
+  const clients = getFilteredClients();
+  const rows = [
+    ["Nome", "CPF", "Telefone", "Status", "Valor emprestado", "Valor combinado", "Recebido", "Pendente", "Data emprestimo", "Data devolucao", "Parcelas pagas", "Parcelas faltando", "Frequencia", "Indicacao"]
+  ];
+
+  clients.forEach((client) => {
+    const status = getClientStatus(client);
+    const counts = getInstallmentCounts(client);
+    rows.push([
+      client.fullName || "",
+      client.cpf || "",
+      client.phone || "",
+      status.label,
+      parseMoneyValue(client.amountBorrowed),
+      parseMoneyValue(client.amountWithInterest),
+      getClientReceivedTotal(client),
+      getClientPendingTotal(client),
+      formatDate(client.loanDate),
+      formatDate(client.returnDate),
+      counts.paid,
+      counts.remaining,
+      client.frequency || "",
+      client.hasReferral ? client.referralName || "Sim" : "NÃ£o"
+    ]);
+  });
+
+  const csv = rows.map((row) => row.map(csvCell).join(";")).join("\n");
+  downloadTextFile(`backup-clientes-${today()}.csv`, `\ufeff${csv}`, "text/csv;charset=utf-8");
+}
+
+function exportAllPdf() {
+  const clients = getFilteredClients();
+  const finance = getFinancialSummary(clients);
+  const rows = clients.map((client) => {
+    const status = getClientStatus(client);
+    const counts = getInstallmentCounts(client);
+    return `
+      <tr>
+        <td>${escapeHtml(client.fullName || "")}</td>
+        <td>${escapeHtml(client.cpf || "")}</td>
+        <td>${escapeHtml(client.phone || "")}</td>
+        <td>${escapeHtml(status.label)}</td>
+        <td>${formatMoney(client.amountBorrowed)}</td>
+        <td>${formatMoney(client.amountWithInterest)}</td>
+        <td>${formatMoney(getClientReceivedTotal(client))}</td>
+        <td>${formatMoney(getClientPendingTotal(client))}</td>
+        <td>${counts.paid} pagas / ${counts.remaining} faltando</td>
+      </tr>
+    `;
+  }).join("");
+
+  const printHtml = `
+    <!doctype html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <title>Backup geral - GestÃ£o Isabella & Romildo</title>
+      <style>
+        body { font-family: Arial, sans-serif; color: #1d1b17; margin: 28px; }
+        h1 { margin-bottom: 6px; }
+        .muted { color: #746f62; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+        .box { border: 1px solid #ddd3c2; border-radius: 8px; padding: 10px; background: #fffdf8; }
+        .box span { display: block; color: #746f62; font-size: 12px; }
+        .box strong { display: block; margin-top: 4px; font-size: 17px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+        th, td { border-bottom: 1px solid #ddd3c2; padding: 8px; text-align: left; vertical-align: top; }
+        th { background: #f3e8cc; }
+      </style>
+    </head>
+    <body>
+      <h1>Backup geral - GestÃ£o Isabella & Romildo</h1>
+      <p class="muted">Exportado em ${formatDateTime(nowIso())}. Filtro de mÃªs: ${state.dateFilter || "todos"}.</p>
+      <div class="grid">
+        <div class="box"><span>Total emprestado</span><strong>${formatMoney(finance.borrowed)}</strong></div>
+        <div class="box"><span>Total combinado</span><strong>${formatMoney(finance.expected)}</strong></div>
+        <div class="box"><span>Total recebido</span><strong>${formatMoney(finance.received)}</strong></div>
+        <div class="box"><span>Total pendente</span><strong>${formatMoney(finance.pending)}</strong></div>
+      </div>
+      <table>
+        <thead><tr><th>Cliente</th><th>CPF</th><th>Telefone</th><th>Status</th><th>Emprestado</th><th>Combinado</th><th>Recebido</th><th>Pendente</th><th>Parcelas</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="9">Nenhum cliente encontrado.</td></tr>`}</tbody>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const win = window.open("", "_blank");
+  if (!win) {
+    showToast("Permita pop-ups para gerar o backup em PDF.");
+    return;
+  }
+  win.document.write(printHtml);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+}
+
+function csvCell(value) {
+  const text = String(value ?? "").replace(/"/g, '""');
+  return `"${text}"`;
+}
+
+function downloadTextFile(fileName, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function openWhatsApp(id) {
+  const client = findClient(id);
+  if (!client) return;
+  const phone = normalizePhone(client.phone);
+  if (!phone) {
+    showToast("Esse cliente nÃ£o tem telefone cadastrado.");
+    return;
+  }
+
+  const next = getNextOpenInstallment(client);
+  const pending = getClientPendingTotal(client);
+  const message = [
+    `OlÃ¡, ${client.fullName}.`,
+    next ? `Passando para lembrar sobre ${next.label}, prevista para ${formatDate(next.dueDate)}.` : "Passando para falar sobre seu acordo.",
+    pending > 0 ? `Valor pendente registrado: ${formatMoney(pending)}.` : "",
+    "Qualquer coisa me chama por aqui."
+  ].filter(Boolean).join(" ");
+
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+}
+
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("55")) return digits;
+  return `55${digits}`;
+}
+
+function getNextOpenInstallment(client) {
+  return (client.installments || [])
+    .filter((item) => item.status !== "paid")
+    .sort((a, b) => new Date(`${a.dueDate || "9999-12-31"}T12:00:00`) - new Date(`${b.dueDate || "9999-12-31"}T12:00:00`))[0] || null;
+}
+
 function showDialog(id) {
   const dialog = $(`#${id}`);
   if (dialog.showModal) dialog.showModal();
@@ -1338,7 +1735,8 @@ async function setupRemoteStorage() {
   const hasConfig = config.supabaseUrl &&
     config.supabaseAnonKey &&
     !config.supabaseUrl.includes("COLE_AQUI") &&
-    !config.supabaseAnonKey.includes("COLE_AQUI");
+    !config.supabaseAnonKey.includes("COLE_AQUI") &&
+    /^https?:\/\//.test(config.supabaseUrl);
 
   if (!hasConfig) {
     state.storageMode = "local";
@@ -1357,9 +1755,16 @@ async function setupRemoteStorage() {
     }
   }
 
-  supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-  state.storageMode = "online";
-  state.storageReady = true;
+  try {
+    supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    state.storageMode = "online";
+    state.storageReady = true;
+  } catch (error) {
+    console.error("Configuração do Supabase inválida:", error);
+    supabaseClient = null;
+    state.storageMode = "local";
+    state.storageReady = false;
+  }
 }
 
 function loadScript(src) {
@@ -1693,10 +2098,19 @@ function formatDateTime(value) {
 
 function formatMoney(value) {
   if (value === null || value === undefined || value === "") return "Manual";
-  const normalized = String(value).replace(/\./g, "").replace(",", ".");
-  const number = Number(normalized);
+  const number = parseMoneyValue(value);
   if (Number.isNaN(number)) return escapeHtml(String(value));
   return number.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function parseMoneyValue(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const normalized = String(value)
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const number = Number(normalized);
+  return Number.isNaN(number) ? 0 : number;
 }
 
 function escapeHtml(value) {
