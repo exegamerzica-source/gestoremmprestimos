@@ -1,7 +1,7 @@
 const STORAGE_KEY = "gestor-emprestimos-clientes-v2";
 const SESSION_KEY = "gestor-emprestimos-sessao-v1";
 const DEFAULT_STATE_ID = "main-v2";
-const ADMIN_PASSWORD = "admin123";
+const ADMIN_PASSWORD = "Isabella";
 
 const state = {
   clients: [],
