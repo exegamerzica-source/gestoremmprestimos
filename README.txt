@@ -25,7 +25,7 @@ O que esta versão já faz:
 - Resumo financeiro: total emprestado, combinado, recebido e pendente.
 - Botão WhatsApp dentro do cliente e nos avisos de cobrança.
 - Backup geral em CSV e impressão/PDF.
-- Marca visual "Gestão Isabella & Romildo".
+- Mantém a marca original "Gestor de Empréstimos".
 - Histórico em formato de timeline.
 - Aba Documentos com arquivos ligados ao cliente.
 - Exportação de ficha completa do cliente para impressão/PDF.

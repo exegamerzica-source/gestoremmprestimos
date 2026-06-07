@@ -200,11 +200,11 @@ function renderCommandBar() {
   return `
     <div class="command-bar">
       <label class="command-search">
-        Busca rÃ¡pida ${help("Procure por nome, CPF, telefone, e-mail, endereÃ§o ou indicaÃ§Ã£o sem sair da tela atual.")}
+        Busca rápida ${help("Procure por nome, CPF, telefone, e-mail, endereço ou indicação sem sair da tela atual.")}
         <input id="globalSearch" value="${escapeHtml(state.globalSearch)}" placeholder="Buscar cliente, CPF ou telefone">
       </label>
       <label class="command-date">
-        Filtrar por mÃªs ${help("Filtra clientes, resumo financeiro, vencimentos e histÃ³rico pelo mÃªs escolhido.")}
+        Filtrar por mês ${help("Filtra clientes, resumo financeiro, vencimentos e histórico pelo mês escolhido.")}
         <input id="dateFilter" type="month" value="${escapeHtml(state.dateFilter)}">
       </label>
       <div class="command-actions">
@@ -232,7 +232,7 @@ function renderGlobalSearchResults() {
         <article class="search-result-row">
           <div>
             <strong>${escapeHtml(client.fullName)}</strong>
-            <span>${escapeHtml(client.cpf || "CPF nÃ£o informado")} - ${escapeHtml(client.phone || "Telefone nÃ£o informado")}</span>
+            <span>${escapeHtml(client.cpf || "CPF não informado")} - ${escapeHtml(client.phone || "Telefone não informado")}</span>
           </div>
           <div class="inline-actions">
             <button class="ghost-btn" type="button" data-action="open-client" data-id="${client.id}">Abrir</button>
@@ -340,7 +340,7 @@ function renderFinancialSummary(finance) {
   return `
     <div class="finance-grid">
       <div class="finance-card">
-        <span>Total emprestado ${help("Soma dos valores que saÃ­ram para clientes no perÃ­odo filtrado.")}</span>
+        <span>Total emprestado ${help("Soma dos valores que saíram para clientes no período filtrado.")}</span>
         <strong>${formatMoney(finance.borrowed)}</strong>
       </div>
       <div class="finance-card">
@@ -352,7 +352,7 @@ function renderFinancialSummary(finance) {
         <strong>${formatMoney(finance.received)}</strong>
       </div>
       <div class="finance-card">
-        <span>Total pendente ${help("DiferenÃ§a entre o combinado e o que jÃ¡ foi marcado como pago.")}</span>
+        <span>Total pendente ${help("Diferença entre o combinado e o que já foi marcado como pago.")}</span>
         <strong>${formatMoney(finance.pending)}</strong>
       </div>
     </div>
@@ -373,7 +373,7 @@ function renderDueAlerts(alerts) {
   return `
     <div class="due-alerts">
       ${block("Vence hoje", alerts.today, "today", "Nada vencendo hoje.")}
-      ${block("Vence na semana", alerts.week, "week", "Nenhuma parcela vencendo nos prÃ³ximos 7 dias.")}
+      ${block("Vence na semana", alerts.week, "week", "Nenhuma parcela vencendo nos próximos 7 dias.")}
       ${block("Atrasado", alerts.overdue, "overdue", "Nenhuma parcela atrasada pelo prazo.")}
     </div>
   `;
@@ -1591,7 +1591,7 @@ function exportAllCsv() {
       counts.paid,
       counts.remaining,
       client.frequency || "",
-      client.hasReferral ? client.referralName || "Sim" : "NÃ£o"
+      client.hasReferral ? client.referralName || "Sim" : "Não"
     ]);
   });
 
@@ -1625,7 +1625,7 @@ function exportAllPdf() {
     <html lang="pt-BR">
     <head>
       <meta charset="utf-8">
-      <title>Backup geral - GestÃ£o Isabella & Romildo</title>
+      <title>Backup geral - Gestor de Empréstimos</title>
       <style>
         body { font-family: Arial, sans-serif; color: #1d1b17; margin: 28px; }
         h1 { margin-bottom: 6px; }
@@ -1640,8 +1640,8 @@ function exportAllPdf() {
       </style>
     </head>
     <body>
-      <h1>Backup geral - GestÃ£o Isabella & Romildo</h1>
-      <p class="muted">Exportado em ${formatDateTime(nowIso())}. Filtro de mÃªs: ${state.dateFilter || "todos"}.</p>
+      <h1>Backup geral - Gestor de Empréstimos</h1>
+      <p class="muted">Exportado em ${formatDateTime(nowIso())}. Filtro de mês: ${state.dateFilter || "todos"}.</p>
       <div class="grid">
         <div class="box"><span>Total emprestado</span><strong>${formatMoney(finance.borrowed)}</strong></div>
         <div class="box"><span>Total combinado</span><strong>${formatMoney(finance.expected)}</strong></div>
@@ -1689,14 +1689,14 @@ function openWhatsApp(id) {
   if (!client) return;
   const phone = normalizePhone(client.phone);
   if (!phone) {
-    showToast("Esse cliente nÃ£o tem telefone cadastrado.");
+    showToast("Esse cliente não tem telefone cadastrado.");
     return;
   }
 
   const next = getNextOpenInstallment(client);
   const pending = getClientPendingTotal(client);
   const message = [
-    `OlÃ¡, ${client.fullName}.`,
+    `Olá, ${client.fullName}.`,
     next ? `Passando para lembrar sobre ${next.label}, prevista para ${formatDate(next.dueDate)}.` : "Passando para falar sobre seu acordo.",
     pending > 0 ? `Valor pendente registrado: ${formatMoney(pending)}.` : "",
     "Qualquer coisa me chama por aqui."
