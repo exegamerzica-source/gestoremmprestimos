@@ -536,6 +536,7 @@ function renderClientCard(client) {
         <button class="ghost-btn" type="button" data-action="open-client" data-id="${client.id}">Abrir</button>
         <button class="ghost-btn" type="button" data-action="whatsapp-client" data-id="${client.id}">WhatsApp</button>
         ${isAdmin() ? `<button class="ghost-btn" type="button" data-action="edit-client" data-id="${client.id}">Editar</button>` : ""}
+        ${isAdmin() ? `<button class="danger-btn" type="button" data-action="delete-client" data-id="${client.id}">Apagar</button>` : ""}
         <button class="ghost-btn" type="button" data-action="export-client" data-id="${client.id}">Exportar ficha</button>
       </div>
     </article>
@@ -570,6 +571,7 @@ function renderClientDetail() {
           <button class="ghost-btn" type="button" data-action="back-to-clients">Voltar</button>
           <button class="ghost-btn" type="button" data-action="whatsapp-client" data-id="${client.id}">WhatsApp</button>
           ${isAdmin() ? `<button class="primary-btn" type="button" data-action="edit-client" data-id="${client.id}">Editar</button>` : ""}
+          ${isAdmin() ? `<button class="danger-btn" type="button" data-action="delete-client" data-id="${client.id}">Apagar</button>` : ""}
         </div>
       </div>
 
@@ -843,7 +845,7 @@ function handleMainClick(event) {
 
   const action = actionButton.dataset.action;
   const id = actionButton.dataset.id;
-  const adminActions = new Set(["new-client", "edit-client", "save-note", "open-payment", "add-document"]);
+  const adminActions = new Set(["new-client", "edit-client", "delete-client", "save-note", "open-payment", "add-document"]);
 
   if (adminActions.has(action) && !requireAdmin()) {
     return;
@@ -851,6 +853,7 @@ function handleMainClick(event) {
 
   if (action === "new-client") openClientDialog();
   if (action === "edit-client") openClientDialog(id);
+  if (action === "delete-client") deleteClient(id);
   if (action === "open-client") openClient(id);
   if (action === "back-to-clients") navigate("clients");
   if (action === "go-history") navigate("history");
@@ -989,6 +992,26 @@ async function handleClientSubmit(event) {
   state.view = "detail";
   render();
   showToast("Cliente salvo.");
+}
+
+async function deleteClient(id) {
+  if (!isAdmin()) return;
+  const client = findClient(id);
+  if (!client) return;
+
+  const ok = window.confirm(`Apagar o cliente "${client.fullName}"? Essa ação remove cadastro, parcelas, histórico e documentos da lista.`);
+  if (!ok) return;
+
+  state.clients = state.clients.filter((item) => item.id !== id);
+  if (state.selectedClientId === id) {
+    state.selectedClientId = null;
+    state.selectedTab = "summary";
+    state.view = "clients";
+  }
+
+  await saveClients();
+  render();
+  showToast("Cliente apagado.");
 }
 
 function openPaymentDialog(clientId, installmentId) {
@@ -1687,29 +1710,49 @@ function downloadTextFile(fileName, text, mime) {
 function openWhatsApp(id) {
   const client = findClient(id);
   if (!client) return;
-  const phone = normalizePhone(client.phone);
-  if (!phone) {
-    showToast("Esse cliente não tem telefone cadastrado.");
-    return;
-  }
 
+  const phone = normalizePhone(client.phone);
+  const message = buildWhatsAppMessage(client);
+  const href = phone
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+  openExternalLink(href);
+
+  if (!phone) {
+    showToast("Cliente sem telefone: abri o WhatsApp para escolher o contato manualmente.");
+  }
+}
+
+function buildWhatsAppMessage(client) {
   const next = getNextOpenInstallment(client);
   const pending = getClientPendingTotal(client);
-  const message = [
+
+  return [
     `Olá, ${client.fullName}.`,
     next ? `Passando para lembrar sobre ${next.label}, prevista para ${formatDate(next.dueDate)}.` : "Passando para falar sobre seu acordo.",
     pending > 0 ? `Valor pendente registrado: ${formatMoney(pending)}.` : "",
     "Qualquer coisa me chama por aqui."
   ].filter(Boolean).join(" ");
+}
 
-  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+function openExternalLink(href) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function normalizePhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
+  let digits = String(value || "").replace(/\D/g, "");
+  digits = digits.replace(/^0+/, "");
   if (!digits) return "";
   if (digits.startsWith("55")) return digits;
-  return `55${digits}`;
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  return digits;
 }
 
 function getNextOpenInstallment(client) {
