@@ -35,12 +35,12 @@ let supabaseClient = null;
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
+  bindStaticEvents();
+
   await setupRemoteStorage();
   state.settings = readLocalSettings() || { ...DEFAULT_SETTINGS };
   state.clients = await loadClients();
   state.session = loadSession();
-
-  bindStaticEvents();
 
   if (state.session) {
     showApp();
@@ -51,6 +51,12 @@ async function init() {
 
 function bindStaticEvents() {
   $("#loginForm").addEventListener("submit", handleLogin);
+  $("#adminLoginBtn").addEventListener("click", handleLogin);
+  $("#loginPassword").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      handleLogin(event);
+    }
+  });
   document.querySelectorAll("[data-viewer-login]").forEach((button) => {
     button.addEventListener("click", () => loginViewer(button.dataset.viewerLogin));
   });
@@ -78,7 +84,7 @@ function bindStaticEvents() {
 }
 
 async function handleLogin(event) {
-  event.preventDefault();
+  event?.preventDefault();
   const adminPassword = $("#loginPassword").value.trim();
 
   if (!(await verifyAdminPassword(adminPassword))) {

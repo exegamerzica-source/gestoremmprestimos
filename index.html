@@ -38,7 +38,7 @@
           </button>
         </section>
 
-        <form id="loginForm" class="access-panel editor-panel">
+        <form id="loginForm" class="access-panel editor-panel" action="#" onsubmit="return false;">
           <div>
             <span class="eyebrow">Editar</span>
             <h2>Admin do sistema <span class="help-tip" title="Isabella entra aqui para cadastrar clientes, editar parcelas, anexar documentos e registrar pagamentos.">?</span></h2>
@@ -52,7 +52,7 @@
             Senha da Isabella <span class="help-tip" title="Senha simples apenas para separar quem edita de quem só visualiza.">?</span>
             <input id="loginPassword" type="password" placeholder="Digite a senha" autocomplete="current-password">
           </label>
-          <button class="primary-btn" type="submit">Entrar para editar</button>
+          <button id="adminLoginBtn" class="primary-btn" type="button">Entrar para editar</button>
           <p id="loginError" class="form-error" hidden>Senha incorreta para editar.</p>
           <p id="loginHint" class="demo-hint">A senha pode ser trocada pela Isabella dentro do painel.</p>
         </form>
