@@ -16,6 +16,7 @@ const state = {
   session: null,
   storageMode: "local",
   storageReady: false,
+  storageError: "",
   view: "dashboard",
   filter: "all",
   search: "",
@@ -476,11 +477,20 @@ function filterButton(filter, label) {
 }
 
 function renderStorageBanner() {
-  if (state.storageMode === "online") {
+  if (state.storageMode === "online" && !state.storageError) {
     return `
       <div class="storage-banner online">
         <strong>Dados online ativos</strong>
         <span>Clientes, parcelas, histórico e documentos ficam compartilhados entre os aparelhos.</span>
+      </div>
+    `;
+  }
+
+  if (state.storageError) {
+    return `
+      <div class="storage-banner error">
+        <strong>Supabase indisponível</strong>
+        <span>${escapeHtml(state.storageError)}</span>
       </div>
     `;
   }
@@ -1843,6 +1853,7 @@ async function setupRemoteStorage() {
   if (!hasConfig) {
     state.storageMode = "local";
     state.storageReady = false;
+    state.storageError = "";
     return;
   }
 
@@ -1853,6 +1864,7 @@ async function setupRemoteStorage() {
       console.error("Não consegui carregar o Supabase:", error);
       state.storageMode = "local";
       state.storageReady = false;
+      state.storageError = "Não consegui carregar a biblioteca do Supabase. Verifique internet, bloqueador ou CDN.";
       return;
     }
   }
@@ -1861,11 +1873,13 @@ async function setupRemoteStorage() {
     supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
     state.storageMode = "online";
     state.storageReady = true;
+    state.storageError = "";
   } catch (error) {
     console.error("Configuração do Supabase inválida:", error);
     supabaseClient = null;
     state.storageMode = "local";
     state.storageReady = false;
+    state.storageError = "Configuração do Supabase inválida. Confira a URL e a chave pública.";
   }
 }
 
@@ -1964,6 +1978,7 @@ async function loadClients() {
       console.error("Erro ao carregar Supabase. Usando modo local:", error);
       state.storageMode = "local";
       state.storageReady = false;
+      state.storageError = getStorageErrorMessage(error);
     }
   }
 
@@ -1989,6 +2004,7 @@ async function saveClients(clients = state.clients) {
     await writeOnlineClients(clients);
   } catch (error) {
     console.error("Erro ao salvar no Supabase:", error);
+    state.storageError = getStorageErrorMessage(error);
     showToast("Salvei neste navegador, mas não consegui sincronizar online.");
   }
 }
@@ -2013,6 +2029,7 @@ async function saveSettings() {
     await writeOnlineClients(state.clients);
   } catch (error) {
     console.error("Erro ao salvar configurações no Supabase:", error);
+    state.storageError = getStorageErrorMessage(error);
     showToast("Salvei neste navegador, mas não consegui sincronizar a senha online.");
   }
 }
@@ -2040,6 +2057,29 @@ function normalizeSettings(settings = {}) {
 function persistSettings(settings) {
   state.settings = normalizeSettings(settings);
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+}
+
+function getStorageErrorMessage(error) {
+  const text = [
+    error?.message,
+    error?.details,
+    error?.hint,
+    error?.code
+  ].filter(Boolean).join(" ");
+
+  if (/failed to fetch|network|dns|load failed/i.test(text)) {
+    return "O projeto do Supabase configurado não respondeu. Verifique se ele está ativo no Supabase e se a URL do projeto está correta.";
+  }
+
+  if (/permission|rls|policy|not authorized|unauthorized|forbidden|401|403/i.test(text)) {
+    return "O Supabase respondeu, mas bloqueou o acesso. Confira as políticas RLS da tabela dashboard_state.";
+  }
+
+  if (/relation|table|schema|42P01/i.test(text)) {
+    return "A tabela dashboard_state não foi encontrada no Supabase. Rode o SQL de criação da tabela.";
+  }
+
+  return "Não consegui sincronizar com o Supabase. Confira se o projeto está ativo, se a URL/chave estão corretas e se a tabela dashboard_state existe.";
 }
 
 async function verifyAdminPassword(password) {
