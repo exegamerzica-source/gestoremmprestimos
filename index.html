@@ -54,7 +54,7 @@
           </label>
           <button class="primary-btn" type="submit">Entrar para editar</button>
           <p id="loginError" class="form-error" hidden>Senha incorreta para editar.</p>
-          <p id="loginHint" class="demo-hint">Senha da editora: <b>Isabella</b></p>
+          <p id="loginHint" class="demo-hint">A senha pode ser trocada pela Isabella dentro do painel.</p>
         </form>
       </div>
     </div>
@@ -323,6 +323,41 @@
       <div class="dialog-actions">
         <button class="ghost-btn" type="button" data-close-dialog="documentDialog">Cancelar</button>
         <button class="primary-btn" type="submit">Salvar documento</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="passwordDialog" class="dialog">
+    <form id="passwordForm" class="dialog-card narrow" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <span class="eyebrow">Configuração da Isabella</span>
+          <h2>Trocar senha de edição</h2>
+          <p>Somente quem já entrou como Isabella consegue alterar a senha usada para editar.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close-dialog="passwordDialog" aria-label="Fechar">×</button>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          Senha atual <span class="help-tip" title="Confirma que é a Isabella fazendo a troca.">?</span>
+          <input id="currentAdminPassword" type="password" autocomplete="current-password" placeholder="Digite a senha atual">
+        </label>
+        <label>
+          Nova senha <span class="help-tip" title="Será usada nos próximos acessos como editora.">?</span>
+          <input id="newAdminPassword" type="password" autocomplete="new-password" placeholder="Digite a nova senha">
+        </label>
+        <label>
+          Confirmar nova senha
+          <input id="confirmAdminPassword" type="password" autocomplete="new-password" placeholder="Repita a nova senha">
+        </label>
+      </div>
+
+      <p id="passwordError" class="form-error password-error" hidden>Não consegui trocar a senha.</p>
+
+      <div class="dialog-actions">
+        <button class="ghost-btn" type="button" data-close-dialog="passwordDialog">Cancelar</button>
+        <button class="primary-btn" type="submit">Salvar nova senha</button>
       </div>
     </form>
   </dialog>

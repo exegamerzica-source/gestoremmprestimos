@@ -1,10 +1,18 @@
 const STORAGE_KEY = "gestor-emprestimos-clientes-v2";
+const SETTINGS_KEY = "gestor-emprestimos-config-v1";
 const SESSION_KEY = "gestor-emprestimos-sessao-v1";
 const DEFAULT_STATE_ID = "main-v2";
-const ADMIN_PASSWORD = "Isabella";
+const DEFAULT_ADMIN_PASSWORD_SALT = "gestor-emprestimos-admin-v1";
+const DEFAULT_ADMIN_PASSWORD_HASH = "522873ea69087baa22ed712199e29ce6536ac2d462964c3116011ea04d64f154";
+const DEFAULT_SETTINGS = {
+  adminPasswordSalt: DEFAULT_ADMIN_PASSWORD_SALT,
+  adminPasswordHash: DEFAULT_ADMIN_PASSWORD_HASH,
+  passwordUpdatedAt: null
+};
 
 const state = {
   clients: [],
+  settings: { ...DEFAULT_SETTINGS },
   session: null,
   storageMode: "local",
   storageReady: false,
@@ -27,6 +35,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   await setupRemoteStorage();
+  state.settings = readLocalSettings() || { ...DEFAULT_SETTINGS };
   state.clients = await loadClients();
   state.session = loadSession();
 
@@ -58,6 +67,7 @@ function bindStaticEvents() {
   $("#clientForm").addEventListener("submit", handleClientSubmit);
   $("#paymentForm").addEventListener("submit", handlePaymentSubmit);
   $("#documentForm").addEventListener("submit", handleDocumentSubmit);
+  $("#passwordForm").addEventListener("submit", handlePasswordSubmit);
 
   mainContent.addEventListener("click", handleMainClick);
   mainContent.addEventListener("input", handleMainInput);
@@ -66,11 +76,11 @@ function bindStaticEvents() {
   document.addEventListener("click", handleOutsideClick);
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const adminPassword = $("#loginPassword").value.trim();
 
-  if (adminPassword !== ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     $("#loginError").hidden = false;
     return;
   }
@@ -78,24 +88,6 @@ function handleLogin(event) {
   state.session = {
     role: "admin",
     label: "Isabella"
-  };
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.session));
-  $("#loginPassword").value = "";
-  $("#loginError").hidden = true;
-  showApp();
-  return;
-
-  const role = $("#loginRole").value;
-  const password = $("#loginPassword").value.trim();
-
-  if (role === "admin" && password !== ADMIN_PASSWORD) {
-    $("#loginError").hidden = false;
-    return;
-  }
-
-  state.session = {
-    role,
-    label: role === "admin" ? "Admin" : "Visualização"
   };
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.session));
   $("#loginPassword").value = "";
@@ -208,6 +200,7 @@ function renderCommandBar() {
         <input id="dateFilter" type="month" value="${escapeHtml(state.dateFilter)}">
       </label>
       <div class="command-actions">
+        ${isAdmin() ? `<button class="ghost-btn" type="button" data-action="change-password">Trocar senha</button>` : ""}
         <button class="ghost-btn" type="button" data-action="clear-filters">Limpar</button>
         <button class="ghost-btn" type="button" data-action="export-all-csv">CSV geral</button>
         <button class="primary-btn" type="button" data-action="export-all-pdf">Backup PDF</button>
@@ -845,7 +838,7 @@ function handleMainClick(event) {
 
   const action = actionButton.dataset.action;
   const id = actionButton.dataset.id;
-  const adminActions = new Set(["new-client", "edit-client", "delete-client", "save-note", "open-payment", "add-document"]);
+  const adminActions = new Set(["new-client", "edit-client", "delete-client", "save-note", "open-payment", "add-document", "change-password"]);
 
   if (adminActions.has(action) && !requireAdmin()) {
     return;
@@ -866,6 +859,7 @@ function handleMainClick(event) {
   if (action === "export-all-csv") exportAllCsv();
   if (action === "export-all-pdf") exportAllPdf();
   if (action === "whatsapp-client") openWhatsApp(id);
+  if (action === "change-password") openPasswordDialog();
   if (action === "clear-filters") {
     state.search = "";
     state.globalSearch = "";
@@ -893,6 +887,71 @@ function requireAdmin() {
   if (isAdmin()) return true;
   showToast("Modo visualização: esse usuário só pode consultar dados.");
   return false;
+}
+
+function openPasswordDialog() {
+  if (!isAdmin()) {
+    showToast("Esse perfil é somente leitura.");
+    return;
+  }
+
+  $("#passwordForm").reset();
+  $("#passwordError").hidden = true;
+  showDialog("passwordDialog");
+  setTimeout(() => $("#currentAdminPassword").focus(), 0);
+}
+
+async function handlePasswordSubmit(event) {
+  event.preventDefault();
+  if (!requireAdmin()) return;
+
+  const currentPassword = $("#currentAdminPassword").value.trim();
+  const newPassword = $("#newAdminPassword").value.trim();
+  const confirmPassword = $("#confirmAdminPassword").value.trim();
+  const submitButton = $("#passwordForm button[type='submit']");
+
+  $("#passwordError").hidden = true;
+
+  if (!(await verifyAdminPassword(currentPassword))) {
+    showPasswordError("Senha atual incorreta.");
+    return;
+  }
+
+  if (newPassword.length < 4) {
+    showPasswordError("Use pelo menos 4 caracteres na nova senha.");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showPasswordError("A confirmação precisa ser igual à nova senha.");
+    return;
+  }
+
+  submitButton.disabled = true;
+
+  try {
+    const salt = `gestor-emprestimos-admin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    persistSettings({
+      ...state.settings,
+      adminPasswordSalt: salt,
+      adminPasswordHash: await hashPassword(newPassword, salt),
+      passwordUpdatedAt: nowIso()
+    });
+    await saveSettings();
+    closeDialog("passwordDialog");
+    showToast("Senha da Isabella atualizada.");
+  } catch (error) {
+    console.error("Erro ao trocar senha:", error);
+    showPasswordError("Não consegui salvar a nova senha. Tente novamente.");
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function showPasswordError(message) {
+  const error = $("#passwordError");
+  error.textContent = message;
+  error.hidden = false;
 }
 
 function openClient(id) {
@@ -1885,7 +1944,11 @@ async function loadClients() {
       if (error) throw error;
 
       if (data?.data) {
-        const onlineClients = Array.isArray(data.data) ? data.data : data.data.clients;
+        const payload = data.data;
+        const onlineClients = Array.isArray(payload) ? payload : payload.clients;
+        if (!Array.isArray(payload) && payload.settings) {
+          persistSettings(payload.settings);
+        }
         if (Array.isArray(onlineClients)) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(onlineClients));
           return onlineClients;
@@ -1893,6 +1956,7 @@ async function loadClients() {
       }
 
       const initialClients = readLocalClients() || [];
+      persistSettings(readLocalSettings() || state.settings);
       await writeOnlineClients(initialClients);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialClients));
       return initialClients;
@@ -1917,6 +1981,7 @@ async function loadClients() {
 
 async function saveClients(clients = state.clients) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+  persistSettings(state.settings);
 
   if (state.storageMode !== "online" || !supabaseClient) return;
 
@@ -1939,9 +2004,83 @@ function readLocalClients() {
   }
 }
 
+async function saveSettings() {
+  persistSettings(state.settings);
+
+  if (state.storageMode !== "online" || !supabaseClient) return;
+
+  try {
+    await writeOnlineClients(state.clients);
+  } catch (error) {
+    console.error("Erro ao salvar configurações no Supabase:", error);
+    showToast("Salvei neste navegador, mas não consegui sincronizar a senha online.");
+  }
+}
+
+function readLocalSettings() {
+  const stored = localStorage.getItem(SETTINGS_KEY);
+  if (!stored) return null;
+
+  try {
+    return normalizeSettings(JSON.parse(stored));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSettings(settings = {}) {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    adminPasswordSalt: settings.adminPasswordSalt || DEFAULT_ADMIN_PASSWORD_SALT,
+    adminPasswordHash: settings.adminPasswordHash || DEFAULT_ADMIN_PASSWORD_HASH
+  };
+}
+
+function persistSettings(settings) {
+  state.settings = normalizeSettings(settings);
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+}
+
+async function verifyAdminPassword(password) {
+  if (!password) return false;
+
+  try {
+    const settings = normalizeSettings(state.settings);
+    const hash = await hashPassword(password, settings.adminPasswordSalt);
+    return timingSafeEqual(hash, settings.adminPasswordHash);
+  } catch (error) {
+    console.error("Erro ao validar senha:", error);
+    showToast("Este navegador não conseguiu validar a senha agora.");
+    return false;
+  }
+}
+
+async function hashPassword(password, salt) {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("Crypto API indisponível");
+  }
+
+  const bytes = new TextEncoder().encode(`${salt}:${password}`);
+  const buffer = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function timingSafeEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  let result = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    result |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  }
+  return result === 0;
+}
+
 async function writeOnlineClients(clients) {
   const payload = {
     clients,
+    settings: normalizeSettings(state.settings),
     updatedAt: nowIso()
   };
 
